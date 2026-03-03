@@ -18,8 +18,11 @@ from .core import (
     STATUS_ICONS,
     STATUS_STYLES,
     _format_elapsed,
+    auto_detect_daemon_mode,
     console,
+    enable_daemon_mode,
     format_elapsed,
+    is_daemon_mode,
     reset_terminal_title,
     set_terminal_title,
 )
@@ -75,9 +78,12 @@ __all__ = [
     # Tracker
     "ExecutionTracker",
     "_format_elapsed",
+    "auto_detect_daemon_mode",
     # Core
     "console",
+    "enable_daemon_mode",
     "format_elapsed",
+    "is_daemon_mode",
     "reset_terminal_title",
     "set_terminal_title",
     "show_all_done",

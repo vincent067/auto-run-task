@@ -279,6 +279,13 @@ def _add_execution_options(parser):
         action="store_true",
         help="Disable color output (useful for CI/piped output)",
     )
+    output_group.add_argument(
+        "--daemon",
+        action="store_true",
+        help="Daemon/supervisor mode: disable interactive features (Live panel, "
+        "terminal title, \\r progress bars), force PIPE subprocess mode, "
+        "use line-buffered output. Auto-enabled when stdout is not a TTY.",
+    )
 
 
 def _add_reset_subparser(subparsers):

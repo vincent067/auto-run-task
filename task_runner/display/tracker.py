@@ -10,7 +10,7 @@ from rich.console import Console, ConsoleOptions, RenderResult
 from rich.live import Live
 from rich.panel import Panel
 
-from .core import SPINNER_FRAMES, _format_elapsed, console
+from .core import SPINNER_FRAMES, _format_elapsed, console, is_daemon_mode
 
 
 class _TrackerRenderable:
@@ -65,8 +65,12 @@ class ExecutionTracker:
         self._enabled: bool = True
 
     def start(self):
-        """Start the live display."""
-        if not self._enabled:
+        """Start the live display.
+
+        Disabled in daemon mode — Rich Live uses cursor manipulation
+        that corrupts supervisor/pipe-captured logs.
+        """
+        if not self._enabled or is_daemon_mode():
             return
         self._live = Live(
             _TrackerRenderable(self),

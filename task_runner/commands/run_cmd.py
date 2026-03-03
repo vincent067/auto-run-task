@@ -128,6 +128,22 @@ def _execute(args, dry_run: bool = False) -> int:
     verbose = getattr(args, "verbose", False)
     quiet = getattr(args, "quiet", False)
     no_color = getattr(args, "no_color", False)
+    daemon = getattr(args, "daemon", False)
+
+    # ── Daemon / supervisor mode ──
+    # Explicit --daemon flag OR auto-detect when stdout is not a TTY
+    # (e.g. supervisord, systemd, nohup, piped output).
+    import sys as _sys
+
+    from ..display import auto_detect_daemon_mode, enable_daemon_mode, is_daemon_mode
+
+    if daemon:
+        enable_daemon_mode()
+    elif not _sys.stdout.isatty():
+        auto_detect_daemon_mode()
+
+    if is_daemon_mode():
+        no_color = True  # force no-color in daemon mode
 
     if no_color:
         from ..display import console as _console

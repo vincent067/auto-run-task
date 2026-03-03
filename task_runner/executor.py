@@ -35,6 +35,7 @@ from .display import (
     SPINNER_FRAMES,
     ExecutionTracker,
     console,
+    is_daemon_mode,
     reset_terminal_title,
     set_terminal_title,
     show_all_done,
@@ -585,19 +586,37 @@ class TaskExecutor:
         import sys as _sys
 
         label = f"next: {next_label}" if next_label else "next task"
-        for remaining in range(delay, 0, -1):
-            if self.interrupted:
-                _sys.stdout.write(f"\r  \u23f3 Delay interrupted.{' ' * 50}\n")
-                _sys.stdout.flush()
-                return
+        daemon = is_daemon_mode()
+
+        # In daemon mode, print one line and sleep — \r carriage returns
+        # produce garbled output in supervisor log files.
+        if daemon:
             _sys.stdout.write(
-                f"\r  \u23f3 Waiting {remaining}s before {label} (anti-rate-limit)..."
+                f"  \u23f3 Waiting {delay}s before {label} (anti-rate-limit)...\n"
             )
             _sys.stdout.flush()
-            time.sleep(1)
+            for remaining in range(delay, 0, -1):
+                if self.interrupted:
+                    _sys.stdout.write(f"  \u23f3 Delay interrupted.\n")
+                    _sys.stdout.flush()
+                    return
+                time.sleep(1)
+            _sys.stdout.write(f"  \u23f3 Delay complete, resuming execution.\n")
+            _sys.stdout.flush()
+        else:
+            for remaining in range(delay, 0, -1):
+                if self.interrupted:
+                    _sys.stdout.write(f"\r  \u23f3 Delay interrupted.{' ' * 50}\n")
+                    _sys.stdout.flush()
+                    return
+                _sys.stdout.write(
+                    f"\r  \u23f3 Waiting {remaining}s before {label} (anti-rate-limit)..."
+                )
+                _sys.stdout.flush()
+                time.sleep(1)
 
-        _sys.stdout.write(f"\r  \u23f3 Delay complete, resuming execution.{' ' * 40}\n")
-        _sys.stdout.flush()
+            _sys.stdout.write(f"\r  \u23f3 Delay complete, resuming execution.{' ' * 40}\n")
+            _sys.stdout.flush()
 
     # ─── Heartbeat ───────────────────────────────────────────────
 
@@ -696,7 +715,10 @@ class TaskExecutor:
                         data = os.read(master_fd, 8192)
                         if not data:
                             break
-                        os.write(sys.stdout.fileno(), data)
+                        try:
+                            os.write(sys.stdout.fileno(), data)
+                        except (BrokenPipeError, OSError):
+                            pass  # stdout pipe closed (supervisor restart, etc.)
                         log_file.write(data)
                         log_file.flush()
                     except OSError as e:
@@ -752,7 +774,10 @@ class TaskExecutor:
                     self._timed_out = True
                     self._timeout_kill()
                     break
-                os.write(sys.stdout.fileno(), line)
+                try:
+                    os.write(sys.stdout.fileno(), line)
+                except (BrokenPipeError, OSError):
+                    pass  # stdout pipe closed (supervisor restart, etc.)
                 log_file.write(line)
                 log_file.flush()
 
@@ -773,6 +798,16 @@ class TaskExecutor:
 
     def execute_task(self, cmd: str, log_path: Path) -> tuple[int, float]:
         self._timed_out = False
+
+        # In daemon mode, skip PTY entirely — PTY relies on a controlling
+        # terminal that doesn't exist under supervisord / systemd / nohup.
+        # PIPE mode is fully sufficient and avoids EIO / TIOCGWINSZ errors.
+        if is_daemon_mode():
+            try:
+                return self._execute_with_pipe(cmd, log_path)
+            finally:
+                self._ensure_child_cleaned_up()
+
         try:
             return self._execute_with_pty(cmd, log_path)
         except Exception as e:
@@ -797,7 +832,10 @@ class TaskExecutor:
                 data = os.read(fd, 8192)
                 if not data:
                     break
-                os.write(sys.stdout.fileno(), data)
+                try:
+                    os.write(sys.stdout.fileno(), data)
+                except (BrokenPipeError, OSError):
+                    pass
                 log_file.write(data)
                 log_file.flush()
             except OSError:

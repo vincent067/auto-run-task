@@ -179,6 +179,7 @@ python run.py run FIX_CODE code-quality-fix --wecom-webhook "https://..."  # 命
 python run.py run FIX_CODE code-quality-fix --verbose    # 详细模式
 python run.py run FIX_CODE code-quality-fix --quiet      # 安静模式
 python run.py run FIX_CODE code-quality-fix --no-color   # 无颜色（CI 环境）
+python run.py run FIX_CODE code-quality-fix --daemon     # 进程守护模式（supervisor/systemd/nohup）
 
 # 心跳间隔
 python run.py run FIX_CODE code-quality-fix --heartbeat 30   # 每 30s 打印一次状态
@@ -314,6 +315,70 @@ python run.py run MY_PROJECT my-tasks
 # → 自动从上次中断的位置继续
 ```
 
+### 场景 5：进程守护 / 后台长时间运行
+
+当需要在 supervisor、systemd 或 nohup 下运行时，使用 `--daemon` 模式：
+
+```bash
+# 显式指定 daemon 模式
+python run.py run MY_PROJECT my-tasks --delay 111-229 --daemon
+
+# 自动检测：当 stdout 不是 TTY 时自动启用 daemon 模式
+# 所以在 supervisor / systemd / nohup 下不加 --daemon 也能正常工作
+nohup python run.py run MY_PROJECT my-tasks --delay 111-229 > task.log 2>&1 &
+```
+
+**Supervisor 配置示例：**
+
+```ini
+[program:auto-task-runner]
+command=/path/to/venv/bin/python /path/to/run.py run MY_PROJECT my-tasks --delay 111-229
+directory=/path/to/auto-run-task
+autostart=true
+autorestart=false
+stdout_logfile=/var/log/auto-task-runner.log
+stderr_logfile=/var/log/auto-task-runner-err.log
+environment=PYTHONUNBUFFERED=1
+user=deploy
+```
+
+**systemd 配置示例：**
+
+```ini
+[Unit]
+Description=Auto Task Runner
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/path/to/auto-run-task
+ExecStart=/path/to/venv/bin/python run.py run MY_PROJECT my-tasks --delay 111-229
+Restart=no
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Daemon 模式下的行为变化：**
+
+| 功能 | 正常模式 | Daemon 模式 |
+|------|----------|-------------|
+| Rich Live 面板 | ✅ 实时刷新 | ❌ 禁用（防止光标操纵乱码） |
+| 终端标题 | ✅ 显示进度 | ❌ 禁用（ESC 序列污染日志） |
+| 倒计时动画 | `\r` 覆盖刷新 | 单行输出（兼容日志管道） |
+| 子进程模式 | PTY（保持色彩） | PIPE（兼容无终端环境） |
+| 颜色输出 | ✅ Rich 彩色 | ❌ 自动禁用 |
+| stdout 缓冲 | 系统默认 | 强制行缓冲（日志实时可见） |
+| 断点续跑 | ✅ | ✅（状态持久化不受影响） |
+| 企业微信通知 | ✅ | ✅（推荐配合使用） |
+
+> 💡 **提示：** 在 daemon 模式下推荐配合 `--notify` 或 `--notify-each` 使用企业微信通知，
+> 这样即使不盯着日志也能实时了解执行进度。
+
 ---
 
 ## 数据结构详解
@@ -442,6 +507,7 @@ python run.py run MY_PROJECT tasks
 | **任务间延时** | 默认随机等待 60-120 秒，降低触发反爬/封号风险，`--delay 0` 可关闭 |
 | **PTY 色彩保留** | 使用伪终端执行，AI CLI 的彩色输出原样呈现 |
 | **自动降级** | PTY 不可用时自动切换 PIPE 模式 |
+| **Daemon 兼容** | `--daemon` 或自动检测非 TTY 环境（supervisor/systemd/nohup），禁用交互特性、强制 PIPE 模式、行缓冲输出 |
 | **日志全量捕获** | 终端实时输出的同时写入日志文件，同时生成去噪净化版 `.clean.log` |
 | **心跳 & 标题** | 长时间运行时定期打印状态，终端标题显示任务进度 |
 | **优雅中断** | 第一次 CTRL+C 优雅终止当前任务并保存状态，第二次强制退出 |
