@@ -328,18 +328,41 @@ python run.py run MY_PROJECT my-tasks --delay 111-229 --daemon
 nohup python run.py run MY_PROJECT my-tasks --delay 111-229 > task.log 2>&1 &
 ```
 
+**Supervisor / systemd 配置关键说明：**
+
+Supervisor 和 systemd 使用极简环境启动进程，**不会加载你的 `.bashrc` / `.zshrc`**，
+因此 `kimi`、`agent`、`copilot`、`claude` 等 CLI 工具的路径不在默认 `PATH` 中，
+执行时会报 `Tool Not Found` 或 `command not found`。
+
+你需要先查出每个工具的完整路径，然后在配置中通过 `environment` 传入：
+
+```bash
+# 查询各 CLI 工具的安装路径
+which kimi       # 例如 /usr/local/bin/kimi
+which agent      # 例如 /home/deploy/.local/bin/agent
+which copilot    # 例如 /www/server/nodejs/v22.17.1/bin/copilot
+which claude     # 例如 /home/deploy/.local/bin/claude
+
+# 查询 Python 虚拟环境路径
+which python     # 确保是 venv 内的 python，例如 /path/to/auto-run-task/.task_env/bin/python
+```
+
+将上面得到的目录汇总到 `PATH` 中（取 `dirname` 部分），写入配置的 `environment` 字段。
+
 **Supervisor 配置示例：**
 
 ```ini
 [program:auto-task-runner]
-command=/path/to/venv/bin/python /path/to/run.py run MY_PROJECT my-tasks --delay 111-229
+command=/path/to/auto-run-task/.task_env/bin/python /path/to/auto-run-task/run.py run MY_PROJECT my-tasks --delay 111-229
 directory=/path/to/auto-run-task
 autostart=true
 autorestart=false
 stdout_logfile=/var/log/auto-task-runner.log
 stderr_logfile=/var/log/auto-task-runner-err.log
-environment=PYTHONUNBUFFERED=1
 user=deploy
+; ⬇️ 关键：把 CLI 工具所在目录加入 PATH，否则会 Tool Not Found
+environment=PYTHONUNBUFFERED=1,HOME="/home/deploy",PATH="/www/server/nodejs/v22.17.1/bin:/home/deploy/.local/bin:/usr/local/bin:/usr/bin:/bin"
+; 如果工具需要代理访问，追加：HTTP_PROXY="http://127.0.0.1:7890",HTTPS_PROXY="http://127.0.0.1:7890"
 ```
 
 **systemd 配置示例：**
@@ -353,15 +376,24 @@ After=network.target
 Type=simple
 User=deploy
 WorkingDirectory=/path/to/auto-run-task
-ExecStart=/path/to/venv/bin/python run.py run MY_PROJECT my-tasks --delay 111-229
+ExecStart=/path/to/auto-run-task/.task_env/bin/python run.py run MY_PROJECT my-tasks --delay 111-229
 Restart=no
-Environment=PYTHONUNBUFFERED=1
 StandardOutput=journal
 StandardError=journal
+; ⬇️ 关键：把 CLI 工具所在目录加入 PATH
+Environment=PYTHONUNBUFFERED=1
+Environment=HOME=/home/deploy
+Environment=PATH=/www/server/nodejs/v22.17.1/bin:/home/deploy/.local/bin:/usr/local/bin:/usr/bin:/bin
+; 如果工具需要代理访问：
+; Environment=HTTP_PROXY=http://127.0.0.1:7890
+; Environment=HTTPS_PROXY=http://127.0.0.1:7890
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+> ⚠️ **常见问题：** 如果 `supervisorctl start` 后日志报 `Tool Not Found: copilot`，
+> 说明 `environment` 中的 `PATH` 缺少该工具所在目录。用 `which copilot` 查路径后补上即可。
 
 **Daemon 模式下的行为变化：**
 
