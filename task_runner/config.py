@@ -91,6 +91,15 @@ TOOL_CONFIGS: dict[str, ToolConfig] = {
         supports_model=False,
         description="Claude CLI (claude-opus-4-6 only) — 需要代理",
     ),
+    "opencode": ToolConfig(
+        name="opencode",
+        cmd_template='opencode run --model {model} "$(cat {task_file})"',
+        needs_proxy=False,
+        supports_model=True,
+        default_model="minimax-cn-coding-plan/MiniMax-M2.5-highspeed",
+        models=[],  # opencode supports many providers — run `opencode models` to list
+        description="OpenCode CLI — 无需代理，支持多 provider/model（格式: provider/model）",
+    ),
 }
 
 

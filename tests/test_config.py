@@ -12,7 +12,7 @@ from task_runner.config import (
 
 class TestToolConfig:
     def test_all_expected_tools_present(self):
-        assert set(TOOL_CONFIGS.keys()) == {"kimi", "agent", "copilot", "claude"}
+        assert set(TOOL_CONFIGS.keys()) == {"kimi", "agent", "copilot", "claude", "opencode"}
 
     def test_kimi_no_proxy(self):
         cfg = TOOL_CONFIGS["kimi"]
@@ -38,6 +38,13 @@ class TestToolConfig:
         assert cfg.needs_proxy is True
         assert cfg.supports_model is False
 
+    def test_opencode_no_proxy_with_model(self):
+        cfg = TOOL_CONFIGS["opencode"]
+        assert cfg.needs_proxy is False
+        assert cfg.supports_model is True
+        assert cfg.default_model is not None
+        assert cfg.models == []  # accepts any provider/model
+
     def test_cmd_template_contains_task_file(self):
         """Every tool's command template must reference the {task_file} placeholder."""
         for name, cfg in TOOL_CONFIGS.items():
@@ -56,7 +63,7 @@ class TestGetToolConfig:
         with pytest.raises(KeyError, match="Unknown tool"):
             get_tool_config("nonexistent")
 
-    @pytest.mark.parametrize("tool", ["kimi", "agent", "copilot", "claude"])
+    @pytest.mark.parametrize("tool", ["kimi", "agent", "copilot", "claude", "opencode"])
     def test_all_tools_retrievable(self, tool):
         cfg = get_tool_config(tool)
         assert cfg.name == tool
@@ -73,3 +80,4 @@ class TestListToolNames:
         assert "agent" in names
         assert "copilot" in names
         assert "claude" in names
+        assert "opencode" in names

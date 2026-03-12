@@ -151,6 +151,7 @@ python run.py run FIX_CODE --all --stop-on-error
 python run.py run FIX_CODE code-quality-fix --tool agent --model opus-4.6
 python run.py run FIX_CODE code-quality-fix --tool kimi
 python run.py run FIX_CODE code-quality-fix --tool copilot --model claude-opus-4.6
+python run.py run FIX_CODE code-quality-fix --tool opencode --model minimax/MiniMax-M2.5-highspeed
 
 # 只运行指定批次
 python run.py run FIX_CODE code-quality-fix --batch 1
@@ -316,7 +317,8 @@ python run.py run MY_PROJECT migration --batch 3
   "tasks": [
     { "task_no": "T-1", "cli": { "tool": "kimi" }, "..." : "..." },
     { "task_no": "T-2", "cli": { "tool": "agent", "model": "opus-4.6" }, "..." : "..." },
-    { "task_no": "T-3", "cli": { "tool": "copilot", "model": "claude-opus-4.6" }, "..." : "..." }
+    { "task_no": "T-3", "cli": { "tool": "copilot", "model": "claude-opus-4.6" }, "..." : "..." },
+    { "task_no": "T-4", "cli": { "tool": "opencode", "model": "minimax/MiniMax-M2.5-highspeed" }, "..." : "..." }
   ]
 }
 ```
@@ -374,7 +376,7 @@ nohup python run.py run MY_PROJECT --all --delay 111-229 > task.log 2>&1 &
 **Supervisor / systemd 配置关键说明：**
 
 Supervisor 和 systemd 使用极简环境启动进程，**不会加载你的 `.bashrc` / `.zshrc`**，
-因此 `kimi`、`agent`、`copilot`、`claude` 等 CLI 工具的路径不在默认 `PATH` 中，
+因此 `kimi`、`agent`、`copilot`、`claude`、`opencode` 等 CLI 工具的路径不在默认 `PATH` 中，
 执行时会报 `Tool Not Found` 或 `command not found`。
 
 你需要先查出每个工具的完整路径，然后在配置中通过 `environment` 传入：
@@ -385,6 +387,7 @@ which kimi       # 例如 /usr/local/bin/kimi
 which agent      # 例如 /home/deploy/.local/bin/agent
 which copilot    # 例如 /www/server/nodejs/v22.17.1/bin/copilot
 which claude     # 例如 /home/deploy/.local/bin/claude
+which opencode   # 例如 /usr/local/bin/opencode
 
 # 查询 Python 虚拟环境路径
 which python     # 确保是 venv 内的 python，例如 /path/to/auto-run-task/.task_env/bin/python

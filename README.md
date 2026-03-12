@@ -20,7 +20,7 @@
 
 - 📁 **项目化架构** — 以项目为中心，支持多任务集、运行历史、模板管理
 - 🔧 **多工具支持** — kimi / agent (Claude Code) / copilot / claude，一键切换
-- 🤖 **多模型选择** — 项目级、任务集级、任务级可独立配置 tool/model
+- 🤖 **多模型选择** — 项目级、任务集级、任务级可独立配置 tool/model（opencode 使用 provider/model 格式）
 - 📋 **结构化任务集** — `.tasks.json` 定义任务，`{{key}}` + `#item` 模板渲染
 - 🗂️ **运行时管理** — 每次运行自动创建运行目录、备份任务集、记录历史
 - 🎯 **智能调度** — batch + priority 排序，依赖验证，支持过滤和重试
@@ -84,6 +84,7 @@ python run.py run MY_PROJECT ts1 ts2 ts3     # 顺序执行多个任务集
 | `agent`   | `opus-4.6`        | ✓        | Claude Code Agent CLI   |
 | `copilot` | `claude-opus-4.6` | ✓        | GitHub Copilot CLI      |
 | `claude`  | 固定              | ✓        | Claude CLI（单模型）    |
+| `opencode`| `minimax-cn-coding-plan/MiniMax-M2.5-highspeed` | ✗ | OpenCode CLI（多 provider） |
 
 ---
 
