@@ -39,6 +39,7 @@ TOOL_CONFIGS: dict[str, ToolConfig] = {
         default_model="opus-4.6",
         models=[
             "auto",
+            "composer-2",
             "composer-1.5",
             "composer-1",
             "gpt-5.3-codex",
