@@ -47,3 +47,6 @@ coverage.xml
 .ruff_cache/
 
 .ai/
+
+# Environment variables (secrets — NEVER commit)
+.env

@@ -60,6 +60,9 @@ def _parse_v3_args(argv: list[str]) -> argparse.Namespace:
     # ── status ──
     _add_status_subparser(subparsers)
 
+    # ── plan ──
+    _add_plan_subparser(subparsers)
+
     args = parser.parse_args(argv)
 
     if not args.command:
@@ -401,6 +404,37 @@ def _add_status_subparser(subparsers):
     )
     status_parser.add_argument(
         "project_name", nargs="?", default=None, help="Project name (omit for all)"
+    )
+
+
+def _add_plan_subparser(subparsers):
+    """Add the 'plan' subcommand — launches interactive AI Task Planner REPL."""
+    plan_parser = subparsers.add_parser(
+        "plan",
+        help="Launch interactive AI Task Planner REPL",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""examples:
+  # Launch REPL with a project
+  %(prog)s plan MY_PROJECT
+
+  # Launch REPL and set workspace
+  %(prog)s plan MY_PROJECT --workspace /path/to/repo
+
+  # Launch REPL without a project (set later)
+  %(prog)s plan
+""",
+    )
+    plan_parser.add_argument(
+        "project_name",
+        nargs="?",
+        default=None,
+        help="Project name (optional)",
+    )
+    plan_parser.add_argument(
+        "--workspace",
+        default=None,
+        metavar="DIR",
+        help="Set workspace directory",
     )
 
 

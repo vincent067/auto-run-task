@@ -87,6 +87,11 @@ def main():
 
             sys.exit(handle_status(args))
 
+        elif command == "plan":
+            from task_runner.commands.plan_cmd import handle_plan
+
+            sys.exit(handle_plan(args))
+
         else:
             print(f"Unknown command: {command}")
             sys.exit(1)
