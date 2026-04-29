@@ -21,7 +21,13 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 from anthropic import AsyncAnthropic
-from anthropic.types import MessageParam, TextBlock, ToolResultBlockParam, ToolUseBlock
+from anthropic.types import (
+    MessageParam,
+    TextBlock,
+    ThinkingBlock,
+    ToolResultBlockParam,
+    ToolUseBlock,
+)
 
 from .config import AgentAppConfig
 
@@ -197,10 +203,13 @@ class AnthropicRunner:
             # Process response content blocks
             tool_use_blocks: list[ToolUseBlock] = []
             text_parts: list[str] = []
+            thinking_parts: list[str] = []
 
             for block in response.content:
                 if isinstance(block, TextBlock):
                     text_parts.append(block.text)
+                elif isinstance(block, ThinkingBlock):
+                    thinking_parts.append(block.thinking)
                 elif isinstance(block, ToolUseBlock):
                     tool_use_blocks.append(block)
 
@@ -209,6 +218,12 @@ class AnthropicRunner:
                 text = "\n".join(text_parts)
                 full_output += text
                 assistant_content.append({"type": "text", "text": text})
+            if thinking_parts:
+                # Include thinking in output for models that only return thinking
+                if not text_parts:
+                    thinking_text = "\n".join(thinking_parts)
+                    full_output += thinking_text
+                assistant_content.append({"type": "thinking", "thinking": "\n".join(thinking_parts)})
 
             if tool_use_blocks:
                 # Record tool calls
@@ -276,6 +291,7 @@ class AnthropicRunner:
     ) -> AsyncIterator[StreamEvent]:
         """Run an agent with streaming output.
 
+        Supports both TextDelta (Kimi) and ThinkingDelta (MiniMax M2.7).
         Yields StreamEvent objects for real-time display.
         """
         provider = provider or self.config.default_provider
@@ -291,6 +307,7 @@ class AnthropicRunner:
 
         for _turn in range(max_turns):
             text_buffer = ""
+            thinking_buffer = ""
             current_tool_use: dict[str, Any] | None = None
             tool_use_blocks: list[dict[str, Any]] = []
 
@@ -306,7 +323,8 @@ class AnthropicRunner:
 
             async for event in stream:
                 if event.type == "content_block_start":
-                    if event.content_block.type == "tool_use":
+                    block_type = getattr(event.content_block, "type", None)
+                    if block_type == "tool_use":
                         current_tool_use = {
                             "id": event.content_block.id,
                             "name": event.content_block.name,
@@ -316,29 +334,36 @@ class AnthropicRunner:
                             type="tool_start",
                             tool_name=event.content_block.name,
                         )
+                    elif block_type == "thinking":
+                        yield StreamEvent(type="thinking", data="🧠 ")
 
                 elif event.type == "content_block_delta":
-                    if event.delta.type == "text_delta":
+                    delta_type = getattr(event.delta, "type", None)
+                    if delta_type == "text_delta":
                         text_buffer += event.delta.text
                         yield StreamEvent(type="text", data=event.delta.text)
-                    elif event.delta.type == "input_json_delta":
+                    elif delta_type == "thinking_delta":
+                        thinking_buffer += event.delta.thinking
+                        yield StreamEvent(type="thinking", data=event.delta.thinking)
+                    elif delta_type == "input_json_delta":
                         if current_tool_use:
                             current_tool_use["input"] += event.delta.partial_json
 
-                elif event.type == "content_block_stop" and current_tool_use:
-                    try:
-                        current_tool_use["input"] = json.loads(
-                            current_tool_use["input"]
+                elif event.type == "content_block_stop":
+                    if current_tool_use:
+                        try:
+                            current_tool_use["input"] = json.loads(
+                                current_tool_use["input"]
+                            )
+                        except json.JSONDecodeError:
+                            current_tool_use["input"] = {}
+                        tool_use_blocks.append(current_tool_use)
+                        yield StreamEvent(
+                            type="tool_result",
+                            tool_name=current_tool_use["name"],
+                            tool_input=current_tool_use["input"],
                         )
-                    except json.JSONDecodeError:
-                        current_tool_use["input"] = {}
-                    tool_use_blocks.append(current_tool_use)
-                    yield StreamEvent(
-                        type="tool_result",
-                        tool_name=current_tool_use["name"],
-                        tool_input=current_tool_use["input"],
-                    )
-                    current_tool_use = None
+                        current_tool_use = None
 
             # After stream completes, check if we need to invoke tools
             if tool_use_blocks:
@@ -346,6 +371,8 @@ class AnthropicRunner:
                 assistant_content: list[Any] = []
                 if text_buffer:
                     assistant_content.append({"type": "text", "text": text_buffer})
+                if thinking_buffer:
+                    assistant_content.append({"type": "thinking", "thinking": thinking_buffer})
                 for tub in tool_use_blocks:
                     assistant_content.append(
                         {
@@ -380,10 +407,13 @@ class AnthropicRunner:
                 msgs.append({"role": "user", "content": tool_results})
             else:
                 # No tool calls — done
+                assistant_content: list[Any] = []
                 if text_buffer:
-                    msgs.append(
-                        {"role": "assistant", "content": [{"type": "text", "text": text_buffer}]}
-                    )
+                    assistant_content.append({"type": "text", "text": text_buffer})
+                if thinking_buffer:
+                    assistant_content.append({"type": "thinking", "thinking": thinking_buffer})
+                if assistant_content:
+                    msgs.append({"role": "assistant", "content": assistant_content})
                 break
 
         yield StreamEvent(type="done", data="")

@@ -17,6 +17,8 @@ from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
+from rich.live import Live
+from rich.markdown import Markdown
 
 from .agents import (
     orchestrator_agent,
@@ -291,17 +293,24 @@ class AgentREPL:
         """Send natural language input to the Orchestrator agent."""
         self.agent_session.add_message("user", user_input)
 
-        # Non-streaming response (more reliable with Anthropic-compatible providers)
-        with show_agent_thinking("Orchestrator"):
-            result = await self.runner.run(
+        # Streaming response for better UX
+        full_text = ""
+        with Live(Markdown(""), refresh_per_second=10, console=console) as live:
+            async for event in self.runner.run_stream(
                 agent=orchestrator_agent,
                 input_text=user_input,
                 provider="kimi",
                 messages=self.agent_session.get_history()[:-1],
-            )
+            ):
+                if event.type == "text":
+                    full_text += event.data
+                    live.update(Markdown(full_text))
+                elif event.type == "thinking":
+                    # Optionally show thinking dots; for now, silently accumulate
+                    pass
+                elif event.type == "done":
+                    break
 
-        full_text = result.output
-        show_agent_response("Orchestrator", full_text)
         self.agent_session.add_message("assistant", full_text)
 
     async def _run_full_pipeline(self, requirement: str) -> None:
